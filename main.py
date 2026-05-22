@@ -148,34 +148,38 @@ def get_recommendations():
         return picked_stocks
 
     def get_stats(ticker):
-        stock = yf.Ticker(ticker)
-        # Get the intraday data for the current day
-        intraday_data = stock.history(period='1d', interval='1m')
-
-        # Access the most recent closing price (current value)
-        current_value = intraday_data['Close'].iloc[-1]
-        return [ticker, current_value]
+        try:
+            stock = yf.Ticker(ticker)
+            intraday_data = stock.history(period='1d', interval='1m')
+            if intraday_data.empty:
+                intraday_data = stock.history(period='5d', interval='1d')
+            if intraday_data.empty:
+                return [ticker, 0.0]
+            current_value = float(intraday_data['Close'].iloc[-1])
+            return [ticker, current_value]
+        except Exception as e:
+            print(f"Error in get_stats for {ticker}: {e}")
+            return [ticker, 0.0]
     
     def get_change(ticker):
-        stock = yf.Ticker(ticker)
-        
-        # Get the intraday data for the current day
-        intraday_data = stock.history(period='1d', interval='1m')
-
-        # Access the most recent closing price (current value)
-        current_value = intraday_data['Close'].iloc[-1]
-
-        # Access the closing price from yesterday (second-to-last data point)
-        historical_data = stock.history(period='2d', interval='1d')
-        yesterday_close = historical_data['Close'].iloc[-2]
-
-        # Calculate the change in dollars
-        change_in_dollars = current_value - yesterday_close
-
-        # Calculate the percent change
-        percent_change = (change_in_dollars / yesterday_close) * 100
-        
-        return change_in_dollars, percent_change
+        try:
+            stock = yf.Ticker(ticker)
+            intraday_data = stock.history(period='1d', interval='1m')
+            if intraday_data.empty:
+                intraday_data = stock.history(period='5d', interval='1d')
+            if intraday_data.empty:
+                return 0.0, 0.0
+            current_value = float(intraday_data['Close'].iloc[-1])
+            historical_data = stock.history(period='5d', interval='1d')
+            if len(historical_data) < 2:
+                return 0.0, 0.0
+            yesterday_close = float(historical_data['Close'].iloc[-2])
+            change_in_dollars = current_value - yesterday_close
+            percent_change = (change_in_dollars / yesterday_close) * 100
+            return change_in_dollars, percent_change
+        except Exception as e:
+            print(f"Error in get_change for {ticker}: {e}")
+            return 0.0, 0.0
     
     
     # Printing out the array of arrays received from the URL
@@ -279,34 +283,38 @@ def get_SingleRecommendations():
         return picked_stocks
 
     def get_stats(ticker):
-        stock = yf.Ticker(ticker)
-        # Get the intraday data for the current day
-        intraday_data = stock.history(period='1d', interval='1m')
-
-        # Access the most recent closing price (current value)
-        current_value = intraday_data['Close'].iloc[-1]
-        return [ticker, current_value]
+        try:
+            stock = yf.Ticker(ticker)
+            intraday_data = stock.history(period='1d', interval='1m')
+            if intraday_data.empty:
+                intraday_data = stock.history(period='5d', interval='1d')
+            if intraday_data.empty:
+                return [ticker, 0.0]
+            current_value = float(intraday_data['Close'].iloc[-1])
+            return [ticker, current_value]
+        except Exception as e:
+            print(f"Error in get_stats for {ticker}: {e}")
+            return [ticker, 0.0]
     
     def get_change(ticker):
-        stock = yf.Ticker(ticker)
-        
-        # Get the intraday data for the current day
-        intraday_data = stock.history(period='1d', interval='1m')
-
-        # Access the most recent closing price (current value)
-        current_value = intraday_data['Close'].iloc[-1]
-
-        # Access the closing price from yesterday (second-to-last data point)
-        historical_data = stock.history(period='2d', interval='1d')
-        yesterday_close = historical_data['Close'].iloc[-2]
-
-        # Calculate the change in dollars
-        change_in_dollars = current_value - yesterday_close
-
-        # Calculate the percent change
-        percent_change = (change_in_dollars / yesterday_close) * 100
-        
-        return change_in_dollars, percent_change
+        try:
+            stock = yf.Ticker(ticker)
+            intraday_data = stock.history(period='1d', interval='1m')
+            if intraday_data.empty:
+                intraday_data = stock.history(period='5d', interval='1d')
+            if intraday_data.empty:
+                return 0.0, 0.0
+            current_value = float(intraday_data['Close'].iloc[-1])
+            historical_data = stock.history(period='5d', interval='1d')
+            if len(historical_data) < 2:
+                return 0.0, 0.0
+            yesterday_close = float(historical_data['Close'].iloc[-2])
+            change_in_dollars = current_value - yesterday_close
+            percent_change = (change_in_dollars / yesterday_close) * 100
+            return change_in_dollars, percent_change
+        except Exception as e:
+            print(f"Error in get_change for {ticker}: {e}")
+            return 0.0, 0.0
     
     
     # Printing out the array of arrays received from the URL
