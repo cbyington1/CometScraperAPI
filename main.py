@@ -27,23 +27,47 @@ file_path = os.path.join(base_dir, 'StockInfo.txt')
 app = Flask(__name__)
 CORS(app, resources={r"*": {"origins": "*"}})
 
+# Download NLTK data at startup
+nltk.download('vader_lexicon', quiet=True)
+
 @app.route('/trending', methods=['GET'])
 def get_trending():
-    url = 'https://finance.yahoo.com/gainers'
-
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     trendingArray = []
-    ytext = requests.get(url).text
-    yroot = lxml.html.fromstring(ytext)
-    for x in yroot.xpath('//*[@id="fin-scr-res-table"]//a'):
-        trendingArray.append(x.attrib['href'].split("/")[-1].split("?")[0])
-
-    url2 = 'https://finance.yahoo.com/losers'
-
     losingArray = []
-    ytext = requests.get(url2).text
-    yroot = lxml.html.fromstring(ytext)
-    for x in yroot.xpath('//*[@id="fin-scr-res-table"]//a'):
-        losingArray.append(x.attrib['href'].split("/")[-1].split("?")[0])
+
+    try:
+        url = 'https://finance.yahoo.com/gainers/'
+        ytext = requests.get(url, headers=headers).text
+        yroot = lxml.html.fromstring(ytext)
+        # Try multiple XPath selectors (Yahoo changes these periodically)
+        for xpath in ['//*[@id="fin-scr-res-table"]//a', '//a[contains(@href,"/quote/")]']:
+            for x in yroot.xpath(xpath):
+                href = x.attrib.get('href', '')
+                if '/quote/' in href:
+                    ticker = href.split("/quote/")[-1].split("?")[0].split("/")[0]
+                    if ticker and ticker not in trendingArray:
+                        trendingArray.append(ticker)
+            if trendingArray:
+                break
+    except Exception as e:
+        print(f"Error fetching trending: {e}")
+
+    try:
+        url2 = 'https://finance.yahoo.com/losers/'
+        ytext = requests.get(url2, headers=headers).text
+        yroot = lxml.html.fromstring(ytext)
+        for xpath in ['//*[@id="fin-scr-res-table"]//a', '//a[contains(@href,"/quote/")]']:
+            for x in yroot.xpath(xpath):
+                href = x.attrib.get('href', '')
+                if '/quote/' in href:
+                    ticker = href.split("/quote/")[-1].split("?")[0].split("/")[0]
+                    if ticker and ticker not in losingArray:
+                        losingArray.append(ticker)
+            if losingArray:
+                break
+    except Exception as e:
+        print(f"Error fetching losers: {e}")
 
     return jsonify({
         'Trending' : trendingArray,
@@ -53,32 +77,32 @@ def get_trending():
 
 @app.route('/stock_info', methods=['GET'])
 def get_stock_info():
-    # Retrieve the stock ticker from the query parameters
     stock_ticker = request.args.get('ticker')
-    
-    stock = yf.Ticker(stock_ticker)
-    # Get the intraday data for the current day
-    intraday_data = stock.history(period='1d', interval='1m')
+    try:
+        stock = yf.Ticker(stock_ticker)
+        intraday_data = stock.history(period='1d', interval='1m')
 
-    # Access the most recent closing price (current value)
-    current_value = intraday_data['Close'].iloc[-1]
+        if intraday_data.empty:
+            # Fallback to daily data
+            intraday_data = stock.history(period='5d', interval='1d')
 
-    # Access the closing price from yesterday (second-to-last data point)
-    historical_data = stock.history(period='2d', interval='1d')
-    yesterday_close = historical_data['Close'].iloc[-2]
+        current_value = float(intraday_data['Close'].iloc[-1])
 
-    # Calculate the change in dollars
-    change_in_dollars = current_value - yesterday_close
+        historical_data = stock.history(period='5d', interval='1d')
+        yesterday_close = float(historical_data['Close'].iloc[-2])
 
-    # Calculate the percent change
-    percent_change = (change_in_dollars / yesterday_close) * 100
+        change_in_dollars = current_value - yesterday_close
+        percent_change = (change_in_dollars / yesterday_close) * 100
 
-    return jsonify({
-        'Stock': stock_ticker,
-        'Value': current_value,
-        'dChange': change_in_dollars,
-        'pChange': percent_change
-    })
+        return jsonify({
+            'Stock': stock_ticker,
+            'Value': current_value,
+            'dChange': change_in_dollars,
+            'pChange': percent_change
+        })
+    except Exception as e:
+        print(f"Error fetching stock info for {stock_ticker}: {e}")
+        return jsonify({'error': str(e), 'Stock': stock_ticker}), 500
         
  
 @app.route('/recommendations', methods=['GET'])
@@ -88,7 +112,7 @@ def get_recommendations():
         sector_info = {}
 
         # Read sector information from StockInfo.txt
-        with open("StockInfo.txt", "r") as file:
+        with open(file_path, "r") as file:
             for line in file:
                 parts = line.strip().split(", ")
                 if len(parts) >= 3:
@@ -113,7 +137,7 @@ def get_recommendations():
         # Pick stocks based on sector distribution percentages
         for sector, percentage in sector_distribution.items():
             num_stocks = int(total_stocks * (percentage / 100))
-            with open("StockInfo.txt", "r") as file:
+            with open(file_path, "r") as file:
                 stocks_in_sector = [line.split(", ")[0] for line in file if line.strip().endswith(sector)]
                 
                 # Exclude stocks that are already in existing_stocks
@@ -219,7 +243,7 @@ def get_SingleRecommendations():
         sector_info = {}
 
         # Read sector information from StockInfo.txt
-        with open("StockInfo.txt", "r") as file:
+        with open(file_path, "r") as file:
             for line in file:
                 parts = line.strip().split(", ")
                 if len(parts) >= 3:
@@ -244,7 +268,7 @@ def get_SingleRecommendations():
         # Pick stocks based on sector distribution percentages
         for sector, percentage in sector_distribution.items():
             num_stocks = int(total_stocks * (percentage / 100))
-            with open("StockInfo.txt", "r") as file:
+            with open(file_path, "r") as file:
                 stocks_in_sector = [line.split(", ")[0] for line in file if line.strip().endswith(sector)]
                 
                 # Exclude stocks that are already in existing_stocks
@@ -373,17 +397,19 @@ def get_sentiment():
         print("No 'longBusinessSummary' found in the dictionary.")# get all key value pairs that are available
 
 
-    historical_data = stock.history(period='2d', interval='1d')
+    historical_data = stock.history(period='5d', interval='1d')
 
     # Access the closing price from yesterday (second-to-last data point)
     yesterday_close = float(historical_data['Close'].iloc[-2])
 
-    # Get the intraday data for the current day (as you've already done)
+    # Get the intraday data for the current day
     intraday_data = stock.history(period='1d', interval='1m')
 
-    # Access the most recent closing price (current value)
-# Access the most recent closing price (current value)
-    current_value = float(intraday_data['Close'].iloc[-1])  # Convert to float
+    # Access the most recent closing price (current value) with fallback
+    if intraday_data.empty:
+        current_value = float(historical_data['Close'].iloc[-1])
+    else:
+        current_value = float(intraday_data['Close'].iloc[-1])
 
     # Calculate the change in dollars
     change_in_dollars = current_value - yesterday_close
@@ -405,28 +431,49 @@ def get_sentiment():
                 break
 
             try:
+                # Handle both old and new yfinance news format
+                article_link = article.get('link') or article.get('url', '')
+                article_pub = article.get('publisher', 'Unknown')
+                article_title_raw = article.get('title', '')
+                pub_time = article.get('providerPublishTime') or article.get('publishTime', 0)
+
+                if not article_link:
+                    continue
+
                 # Fetch the article content using requests and BeautifulSoup
-                response = requests.get(article['link'])
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                response = requests.get(article_link, headers=headers, timeout=10)
                 soup = BeautifulSoup(response.text, 'html.parser')
 
-                # Find and print the article body text
-                article_body = soup.find('div', class_='caas-body')
+                # Try multiple selectors for article body (Yahoo changes these)
+                article_body = (
+                    soup.find('div', class_='caas-body') or
+                    soup.find('div', class_='article-body') or
+                    soup.find('article') or
+                    soup.find('div', class_='body')
+                )
                 if article_body:
-                    article_title = article['title']
+                    article_title = article_title_raw
                     article_text = article_body.get_text()
                     article_texts.append((article_title, article_text))
                     articleCt = articleCt + 1
-                    article_links.append(article['link'])
-                    article_publishers.append(article['publisher'])
-                    providerpublishtime = datetime.utcfromtimestamp( article['providerPublishTime'])
-                    current_time = datetime.utcnow()
-                    time_difference = current_time - providerpublishtime
+                    article_links.append(article_link)
+                    article_publishers.append(article_pub)
+
+                    try:
+                        if isinstance(pub_time, (int, float)) and pub_time > 0:
+                            providerpublishtime = datetime.utcfromtimestamp(pub_time)
+                        else:
+                            providerpublishtime = datetime.utcnow()
+                        current_time = datetime.utcnow()
+                        time_difference = current_time - providerpublishtime
+                    except Exception:
+                        time_difference = type('obj', (object,), {'days': 0, 'seconds': 0})()
 
                     # If the article was published on the same day, display the time in hours
                     if time_difference.days == 0:
-                        hours_ago = time_difference.seconds // 3600  # Convert seconds to hours
+                        hours_ago = time_difference.seconds // 3600
                         if hours_ago == 0:
-                            # If less than an hour ago, calculate and display minutes
                             minutes_ago = (time_difference.seconds % 3600) // 60
                             if minutes_ago == 0:
                                 formatted_time = "Just now"
@@ -441,19 +488,16 @@ def get_sentiment():
                     elif time_difference.days == 1:
                         formatted_time = "1 day ago"
                     else:
-                        # If not the same day, display days
                         formatted_time = f"{time_difference.days} days ago"
 
                     article_dates.append(formatted_time)
-                    #print("-" * 50)
                 else:
                     print("Article body not found on the page.")
 
             except Exception as e:
                 print(f"Error processing article: {str(e)}")
                 
-    nltk.download('vader_lexicon')
-    vader = SentimentIntensityAnalyzer() # or whatever you want to call it
+    vader = SentimentIntensityAnalyzer()
 
     data = []
     scores_list = []
