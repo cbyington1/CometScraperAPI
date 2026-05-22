@@ -396,7 +396,29 @@ def get_sentiment():
     chartPointCt =  len(close_prices_list)
 
 
-    news_articles = stock.news
+    # Fetch news via Yahoo RSS feed (more reliable than yfinance .news)
+    news_articles = []
+    try:
+        import xml.etree.ElementTree as ET
+        rss_url = f'https://finance.yahoo.com/rss/headline?s={stock_ticker}'
+        rss_response = requests.get(rss_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+        if rss_response.status_code == 200:
+            root = ET.fromstring(rss_response.content)
+            for item in root.findall('.//item'):
+                title = item.find('title')
+                link = item.find('link')
+                pub_date = item.find('pubDate')
+                source = item.find('source')
+                if title is not None and link is not None:
+                    news_articles.append({
+                        'title': title.text or '',
+                        'link': link.text or '',
+                        'publisher': source.text if source is not None else 'Yahoo Finance',
+                        'providerPublishTime': 0,  # Will use pubDate string instead
+                        'pubDate': pub_date.text if pub_date is not None else '',
+                    })
+    except Exception as e:
+        print(f"Error fetching RSS news for {stock_ticker}: {e}")
     
 
         
@@ -448,6 +470,7 @@ def get_sentiment():
                 article_pub = article.get('publisher', 'Unknown')
                 article_title_raw = article.get('title', '')
                 pub_time = article.get('providerPublishTime') or article.get('publishTime', 0)
+                pub_date_str = article.get('pubDate', '')
 
                 if not article_link:
                     continue
@@ -465,6 +488,9 @@ def get_sentiment():
                     try:
                         if isinstance(pub_time, (int, float)) and pub_time > 0:
                             providerpublishtime = datetime.utcfromtimestamp(pub_time)
+                        elif pub_date_str:
+                            from email.utils import parsedate_to_datetime
+                            providerpublishtime = parsedate_to_datetime(pub_date_str).replace(tzinfo=None)
                         else:
                             providerpublishtime = datetime.utcnow()
                         current_time = datetime.utcnow()
