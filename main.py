@@ -69,6 +69,9 @@ def get_trending():
     except Exception as e:
         print(f"Error fetching losers: {e}")
 
+    trendingArray = [t for t in trendingArray if not any(c in t for c in ['=', '^', '-', '%'])]
+    losingArray = [t for t in losingArray if not any(c in t for c in ['=', '^', '-', '%'])]
+
     return jsonify({
         'Trending' : trendingArray,
         'Losing' : losingArray
