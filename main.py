@@ -461,7 +461,7 @@ def get_sentiment():
     if(news_articles):
 
         for i, article in enumerate(news_articles):
-            if i >= 15:
+            if i >= 5:
                 break
 
             try:
@@ -476,7 +476,7 @@ def get_sentiment():
                     continue
 
                 # Fetch the article content using requests and BeautifulSoup
-                downloaded = trafilatura.fetch_url(article_link)
+                downloaded = trafilatura.fetch_url(article_link, no_ssl=True)
                 article_text = trafilatura.extract(downloaded) if downloaded else None
                 if article_text:
                     article_title = article_title_raw
