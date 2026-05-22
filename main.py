@@ -17,6 +17,7 @@ import json
 import numpy as np  # Import the numpy library
 import os
 from flask_cors import CORS
+import trafilatura
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 file_path = os.path.join(base_dir, 'StockInfo.txt')
@@ -452,20 +453,10 @@ def get_sentiment():
                     continue
 
                 # Fetch the article content using requests and BeautifulSoup
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-                response = requests.get(article_link, headers=headers, timeout=10)
-                soup = BeautifulSoup(response.text, 'html.parser')
-
-                # Try multiple selectors for article body (Yahoo changes these)
-                article_body = (
-                    soup.find('div', class_='caas-body') or
-                    soup.find('div', class_='article-body') or
-                    soup.find('article') or
-                    soup.find('div', class_='body')
-                )
-                if article_body:
+                downloaded = trafilatura.fetch_url(article_link)
+                article_text = trafilatura.extract(downloaded) if downloaded else None
+                if article_text:
                     article_title = article_title_raw
-                    article_text = article_body.get_text()
                     article_texts.append((article_title, article_text))
                     articleCt = articleCt + 1
                     article_links.append(article_link)

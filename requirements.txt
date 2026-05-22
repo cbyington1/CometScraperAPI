@@ -7,4 +7,4 @@ nltk>=3.8.0
 yfinance>=0.2.51,<1.0.0
 numpy>=1.24.0
 requests>=2.31.0
-lxml>=5.2.1
+lxml>=5.2.1trafilatura>=1.6.0
